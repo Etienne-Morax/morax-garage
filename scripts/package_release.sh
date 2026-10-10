@@ -13,8 +13,9 @@
 #   scripts/package_release.sh
 #
 # Environment:
-#   MORAX_SIGN_IDENTITY    Developer ID Application identity (required for distribution)
-#   MORAX_NOTARY_PROFILE   notarytool keychain profile name (required for distribution)
+#   MORAX_SIGN_IDENTITY    Developer ID Application identity (default: the team's one in the keychain)
+#   MORAX_NOTARY_PROFILE   notarytool keychain profile name (default: morax-notary)
+#   MORAX_NOTARY_KEYCHAIN  keychain holding that profile (default: login keychain)
 #   MORAX_TEAM_ID          Apple Developer Team ID (10 chars, optional/checked)
 #   MORAX_VERSION          override the version from ./VERSION
 #   MORAX_BUILD            override the generated build number
@@ -119,7 +120,9 @@ STAPLED=false
 
 if [ -n "$NOTARY_PROFILE" ] && [ "$SIGN_IDENTITY" != "-" ]; then
     release_info "Submitting DMG to Apple notary service..."
-    xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+    NOTARY_ARGS=()
+    while IFS= read -r arg; do NOTARY_ARGS+=("$arg"); done < <(notary_credential_args)
+    xcrun notarytool submit "$DMG_PATH" "${NOTARY_ARGS[@]}" --wait
     NOTARIZED=true
 
     release_info "Stapling notarization ticket to DMG..."

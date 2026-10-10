@@ -64,6 +64,33 @@ resolved_team_id() {
 MORAX_TEAM_ID="${MORAX_TEAM_ID:-$(resolved_team_id)}"
 export MORAX_TEAM_ID
 
+# Prints the first "Developer ID Application" identity of the team found in the
+# keychain search list, or nothing. Empty output is valid: preflight reports it.
+resolved_sign_identity() {
+  [ -n "$MORAX_TEAM_ID" ] || return 0
+  security find-identity -v -p codesigning 2>/dev/null \
+    | awk -F'"' -v team="($MORAX_TEAM_ID)" \
+        '$2 ~ /^Developer ID Application: / && index($2, team) { print $2; exit }'
+}
+
+# Distribution defaults, so a Mac set up with scripts/setup-notarization.sh
+# releases with a plain `scripts/package_release.sh`.
+MORAX_DEFAULT_NOTARY_PROFILE="morax-notary"
+if [ "${ALLOW_UNNOTARIZED:-0}" != "1" ] && [ "${MORAX_ALLOW_AD_HOC:-0}" != "1" ]; then
+  MORAX_SIGN_IDENTITY="${MORAX_SIGN_IDENTITY:-$(resolved_sign_identity)}"
+  MORAX_NOTARY_PROFILE="${MORAX_NOTARY_PROFILE:-$MORAX_DEFAULT_NOTARY_PROFILE}"
+  export MORAX_SIGN_IDENTITY MORAX_NOTARY_PROFILE
+fi
+
+# notarytool arguments selecting the stored credentials. MORAX_NOTARY_KEYCHAIN
+# points at a non-default keychain (CI stores the profile in a temporary one).
+notary_credential_args() {
+  printf '%s\n' --keychain-profile "$MORAX_NOTARY_PROFILE"
+  if [ -n "${MORAX_NOTARY_KEYCHAIN:-}" ]; then
+    printf '%s\n' --keychain "$MORAX_NOTARY_KEYCHAIN"
+  fi
+}
+
 # Remediation text for required environment variables.
 env_var_remediation() {
   local var_name="$1"
@@ -72,7 +99,7 @@ env_var_remediation() {
       printf 'Apple Developer Team ID (10 characters). See docs/DISTRIBUTION.md.'
       ;;
     MORAX_SIGN_IDENTITY)
-      printf 'Full name of the "Developer ID Application: …" certificate in your keychain. List with: security find-identity -v -p codesigning'
+      printf 'No "Developer ID Application" certificate of the team found in the keychain. Run scripts/setup-notarization.sh'
       ;;
     MORAX_NOTARY_PROFILE)
       printf 'notarytool keychain profile name. Create it with: xcrun notarytool store-credentials <profile-name> --apple-id <email> --team-id <team-id> --password <app-specific-password>'

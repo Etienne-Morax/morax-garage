@@ -12,14 +12,7 @@ La release s'exécute via une commande unique qui enchaîne automatiquement les 
 scripts/package_release.sh
 ```
 
-Pour produire une release distribuable officielle notarisée :
-
-```bash
-MORAX_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-MORAX_NOTARY_PROFILE="morax-notary" \
-MORAX_TEAM_ID="<team-id>" \
-scripts/package_release.sh
-```
+Sur un Mac configuré une fois avec `scripts/setup-notarization.sh` (§5), cette commande produit une release signée Developer ID, notarisée et agrafée : l'identité *Developer ID Application* de l'équipe est détectée dans le trousseau et le profil `notarytool` par défaut est `morax-notary`. Les variables `MORAX_SIGN_IDENTITY` et `MORAX_NOTARY_PROFILE` restent disponibles pour les surcharger.
 
 Pour un build de test local / staging sans notarisation :
 
@@ -84,8 +77,9 @@ Aucun secret, certificat ou identifiant privé n'est commité dans le dépôt (`
 
 | Variable | Description |
 |---|---|
-| `MORAX_SIGN_IDENTITY` | Nom de l'identité *Developer ID Application* dans le trousseau macOS. |
-| `MORAX_NOTARY_PROFILE` | Nom du profil `notarytool` enregistré dans le trousseau. |
+| `MORAX_SIGN_IDENTITY` | *(Optionnel)* Identité *Developer ID Application*. Par défaut : celle de l'équipe trouvée dans le trousseau. |
+| `MORAX_NOTARY_PROFILE` | *(Optionnel)* Profil `notarytool` du trousseau, `morax-notary` par défaut. |
+| `MORAX_NOTARY_KEYCHAIN` | *(Optionnel)* Trousseau qui contient ce profil (utilisé par la CI, trousseau de session sinon). |
 | `MORAX_TEAM_ID` | Identifiant d'équipe Apple Developer (10 caractères, lu dans `Config/Signing.xcconfig` si la variable n'est pas définie). |
 | `MORAX_VERSION` | *(Optionnel)* Surcharge de la version définie dans `./VERSION`. |
 | `MORAX_BUILD` | *(Optionnel)* Surcharge du numéro de build généré. |
@@ -100,17 +94,32 @@ Aucun secret, certificat ou identifiant privé n'est commité dans le dépôt (`
 ## 5. Prérequis pour la distribution notarisée
 
 1. **Compte Apple Developer Program** : compte individuel payant. Les certificats de développement ont une validité de **1 an** (au lieu de 7 jours pour l'ancienne Personal Team) et la notarisation Developer ID pour macOS est pleinement accessible.
-2. **Certificat Developer ID Application** installé dans le trousseau :
+2. **Configuration guidée, une fois par Mac** :
    ```bash
-   security find-identity -v -p codesigning
+   scripts/setup-notarization.sh
    ```
-3. **Profil notarytool configuré** dans le trousseau :
+   Le script vérifie la présence du certificat *Developer ID Application* de l'équipe et, s'il manque, indique comment le créer (Xcode > Settings > Accounts > Manage Certificates > « + » > Developer ID Application, rôle Account Holder requis). Il enregistre ensuite le profil `notarytool` `morax-notary` : l'Apple ID et un mot de passe d'application (account.apple.com > Connexion et sécurité) sont saisis dans les invites de `notarytool`, jamais dans le script.
+
+### Releases notarisées en CI
+
+`release.yml` notarise les GitHub Releases dès que ces cinq secrets existent sur le dépôt public (sinon la release reste ad-hoc ; un jeu incomplet fait échouer le workflow) :
+
+| Secret | Contenu |
+|---|---|
+| `MACOS_DEVELOPER_ID_P12_BASE64` | Certificat Developer ID Application + clé privée exportés en `.p12` |
+| `MACOS_DEVELOPER_ID_P12_PASSWORD` | Mot de passe du `.p12` |
+| `NOTARY_API_KEY_P8_BASE64` | Clé API App Store Connect (`AuthKey_XXXX.p8`, rôle Developer) |
+| `NOTARY_API_KEY_ID` | Key ID de cette clé |
+| `NOTARY_API_ISSUER_ID` | Issuer ID (App Store Connect > Users and Access > Integrations) |
+
+1. Trousseaux > *Developer ID Application: …* > clic droit > **Exporter** au format `.p12`.
+2. App Store Connect > Users and Access > Integrations > **App Store Connect API** : créer une clé et télécharger le `.p8` (téléchargeable une seule fois).
+3. Envoyer les secrets (le mot de passe du `.p12` est demandé dans une invite masquée) :
    ```bash
-   xcrun notarytool store-credentials morax-notary \
-     --apple-id "<apple-id-email>" \
-     --team-id "<team-id>" \
-     --password "<app-specific-password>"
+   scripts/set-ci-signing-secrets.sh developer-id.p12 AuthKey_XXXX.p8 <key-id> <issuer-id>
    ```
+
+La CI importe le certificat dans un trousseau temporaire (`scripts/ci-import-signing.sh`), y stocke le profil `notarytool`, puis le supprime en fin de job.
 
 ---
 
@@ -139,8 +148,9 @@ Morax Garage n'embarque **aucun mécanisme de mise à jour Sparkle** en v1.
 
 | Symptôme / Échec | Cause | Remédiation |
 |---|---|---|
-| **Preflight code 64** : `MORAX_SIGN_IDENTITY not found` | Certificat manquant dans le trousseau | Installer le certificat Developer ID exporté depuis developer.apple.com dans le trousseau de session. |
-| **Preflight code 64** : `notarytool cannot use MORAX_NOTARY_PROFILE` | Profil notarytool non configuré | Exécuter `xcrun notarytool store-credentials <profil> --apple-id ... --team-id ... --password ...` |
+| **Preflight** : `missing required environment variables: MORAX_SIGN_IDENTITY` | Aucun certificat Developer ID de l'équipe dans le trousseau | `scripts/setup-notarization.sh` |
+| **Preflight** : `notarytool cannot use MORAX_NOTARY_PROFILE` | Profil notarytool absent ou mot de passe d'application révoqué | `scripts/setup-notarization.sh` |
+| **CI** : `Signing secret for … is missing` | Secrets de signature partiellement définis | Relancer `scripts/set-ci-signing-secrets.sh` |
 | **Build failure** : `Metal toolchain required` | Compilation `swift build --arch` appelée | Ne pas utiliser `--arch` ; le script utilise `--triple` par tranche qui évite la dépendance xcbuild Metal. |
 | **Verification failure** : `Gatekeeper rejected the app` | L'app n'est pas signée avec un Developer ID ou le ticket n'a pas été agrafé | Vérifier la soumission `notarytool` et `stapler staple`. |
 
@@ -153,7 +163,7 @@ Dépôt public : https://github.com/Etienne-Morax/morax-garage
 Le workflow `.github/workflows/release.yml` se déclenche sur un tag `v*` (et manuellement via `workflow_dispatch`, sans publication) :
 
 1. Vérifie que le tag correspond au fichier `VERSION` (`v1.0.1` pour `1.0.1`).
-2. Exécute `ALLOW_UNNOTARIZED=1 scripts/package_release.sh` sur `macos-15` (signature ad-hoc, pas de notarisation).
+2. Importe le certificat et la clé de notarisation si les secrets sont définis (§5), puis exécute `scripts/package_release.sh` sur `macos-15` : release notarisée avec secrets, ad-hoc (`ALLOW_UNNOTARIZED=1`) sans.
 3. Publie via `gh release create` le DMG, son `.sha256` et `release.json`, avec les notes extraites de `docs/CHANGELOG.md` (`scripts/release-notes.sh`).
 
 Publier une version :
@@ -163,7 +173,7 @@ Publier une version :
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-Les builds GitHub sont ad-hoc et non notarisés : au premier lancement, clic droit sur l'app puis **Ouvrir**, ou `xattr -dr com.apple.quarantine "/Applications/Morax Garage.app"`. La notarisation en CI (import d'un certificat Developer ID et d'un profil notarytool depuis des secrets de dépôt) reste un travail futur.
+Sans secrets de signature, les builds GitHub sont ad-hoc et non notarisés : au premier lancement, clic droit sur l'app puis **Ouvrir**, ou `xattr -dr com.apple.quarantine "/Applications/Morax Garage.app"`. Les notes de release et `release.json` indiquent toujours l'état réel.
 
 ## 10. Install from source
 

@@ -40,9 +40,19 @@ jobs:
           swift --version
           xcodebuild -version
 
-      - name: Build, sign (ad-hoc), package and verify
+      - name: Import Developer ID certificate and notary key
+        id: signing
         env:
-          ALLOW_UNNOTARIZED: "1"
+          P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: scripts/ci-import-signing.sh
+
+      - name: Build, sign, notarize when configured, package and verify
+        env:
+          ALLOW_UNNOTARIZED: ${{ steps.signing.outputs.configured == 'true' && '0' || '1' }}
         run: scripts/package_release.sh
 
       - name: Prepare release notes
@@ -58,15 +68,28 @@ jobs:
 
           Open the DMG and drag **Morax Garage** to Applications. Verify the download with the attached `.sha256` file.
 
+          NOTE
+            if [ "$(plutil -extract notarized raw dist/release/release.json)" = "true" ]; then
+              echo "This build is signed with a Developer ID certificate, notarized by Apple and stapled."
+            else
+              cat <<'NOTE'
           This build is **ad-hoc signed and not notarized** (see `release.json`: `notarized: false`). On first launch macOS may block it: right-click the app and choose **Open**, or run:
 
           ```bash
           xattr -dr com.apple.quarantine "/Applications/Morax Garage.app" "/Applications/Morax Garage Menu.app"
           ```
+          NOTE
+            fi
+            cat <<'NOTE'
+
 
           Prefer building locally? `curl -fsSL https://raw.githubusercontent.com/Etienne-Morax/morax-garage/main/scripts/install-from-source.sh | bash`
           NOTE
           } > release-notes.md
+
+      - name: Remove temporary signing keychain
+        if: always() && env.MORAX_NOTARY_KEYCHAIN != ''
+        run: security delete-keychain "$MORAX_NOTARY_KEYCHAIN"
 
       - name: Create GitHub Release
         if: github.ref_type == 'tag'

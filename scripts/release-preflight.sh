@@ -54,7 +54,7 @@ fi
 
 # Check that the identity exists in keychain
 if ! security find-identity -v -p codesigning | grep -Fq "$MORAX_SIGN_IDENTITY"; then
-  release_fail 'MORAX_SIGN_IDENTITY not found in keychain (list with: security find-identity -v -p codesigning)'
+  release_fail 'MORAX_SIGN_IDENTITY not found in keychain (run scripts/setup-notarization.sh, or list with: security find-identity -v -p codesigning)'
 fi
 release_ok 'signing identity found in keychain'
 
@@ -65,8 +65,10 @@ fi
 release_ok 'signing identity is a Developer ID Application certificate'
 
 # Check that notarytool profile is configured and usable
-if ! xcrun notarytool history --keychain-profile "$MORAX_NOTARY_PROFILE" >/dev/null 2>&1; then
-  release_fail 'notarytool cannot use MORAX_NOTARY_PROFILE (create it with: xcrun notarytool store-credentials)'
+NOTARY_ARGS=()
+while IFS= read -r arg; do NOTARY_ARGS+=("$arg"); done < <(notary_credential_args)
+if ! xcrun notarytool history "${NOTARY_ARGS[@]}" >/dev/null 2>&1; then
+  release_fail 'notarytool cannot use MORAX_NOTARY_PROFILE (run scripts/setup-notarization.sh)'
 fi
 release_ok 'notarytool keychain profile is usable'
 

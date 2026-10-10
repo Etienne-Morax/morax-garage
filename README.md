@@ -38,7 +38,7 @@ Morax Garage is a SwiftUI app for macOS 14+ that shows what your Mac is doing (C
 
 Get the latest `.dmg` from [GitHub Releases](https://github.com/Etienne-Morax/morax-garage/releases/latest) and drag **Morax Garage** to Applications.
 
-Releases are currently ad-hoc signed and not notarized, so macOS will block the first launch. Right-click the app and choose **Open**, or clear the quarantine flag:
+Unless its release notes say it is notarized, a release is ad-hoc signed and macOS will block the first launch. Right-click the app and choose **Open**, or clear the quarantine flag:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Morax Garage.app"
