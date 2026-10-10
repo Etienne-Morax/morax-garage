@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version and verify the tag matches VERSION
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "$REF_TYPE" = "tag" ] && [ "$REF_NAME" != "v${version}" ]; then
+            echo "::error::Tag ${REF_NAME} does not match VERSION file (v${version})"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Show toolchain
+        run: |
+          set -euo pipefail
+          swift --version
+          xcodebuild -version
+
+      - name: Build, sign (ad-hoc), package and verify
+        env:
+          ALLOW_UNNOTARIZED: "1"
+        run: scripts/package_release.sh
+
+      - name: Prepare release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            scripts/release-notes.sh "$VERSION"
+            cat <<'NOTE'
+
+          ## Installation
+
+          Open the DMG and drag **Morax Garage** to Applications. Verify the download with the attached `.sha256` file.
+
+          This build is **ad-hoc signed and not notarized** (see `release.json`: `notarized: false`). On first launch macOS may block it: right-click the app and choose **Open**, or run:
+
+          ```bash
+          xattr -dr com.apple.quarantine "/Applications/Morax Garage.app" "/Applications/Morax Garage Menu.app"
+          ```
+
+          Prefer building locally? `curl -fsSL https://raw.githubusercontent.com/Etienne-Morax/morax-garage/main/scripts/install-from-source.sh | bash`
+          NOTE
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            "dist/release/MoraxGarage-${VERSION}.dmg" \
+            "dist/release/MoraxGarage-${VERSION}.dmg.sha256" \
+            "dist/release/release.json" \
+            --title "Morax Garage ${VERSION}" \
+            --notes-file release-notes.md \
+            --verify-tag

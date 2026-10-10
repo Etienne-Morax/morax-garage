@@ -1,0 +1,9 @@
+// Apple Developer Program Signing Configuration
+// Paid individual Apple Developer Program (active since 2026-10-08)
+// Team ID: NU43RNA6U9
+
+DEVELOPMENT_TEAM = NU43RNA6U9
+CODE_SIGN_STYLE = Automatic
+
+// Local machine-specific overrides (gitignored)
+#include? "Signing.local.xcconfig"

@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / Swift Package Manager
+.build/
+Packages/
+xcuserdata/
+*.xcworkspace
+*.xcuserdatad
+DerivedData/
+
+# Distribution bundles and release artefacts
+dist/
+*.app
+*.dmg
+*.xcarchive
+*.sha256
+
+# Local credentials and machine configurations
+*.local.xcconfig
+.env
+.env.local
+*.env
+
+
+# SwiftPM / signing material / local agent settings
+.swiftpm/
+*.p12
+*.mobileprovision
+.claude/settings.local.json

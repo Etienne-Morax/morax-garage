@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Shared signature and environment helpers for Morax Garage release scripts.
+# Sourced, never executed: it defines functions and sets no traps of its own.
+#
+# Nothing here prints the value of a signing identity, Team ID, or notary profile.
+# Callers pass identifiers around by variable name; the scripts only ever report
+# whether a check passed.
+
+release_fail() {
+  printf 'FAIL %s\n' "$1" >&2
+  exit 1
+}
+
+release_ok() {
+  printf 'OK   %s\n' "$1"
+}
+
+release_info() {
+  printf '==>  %s\n' "$1"
+}
+
+# Prints the full `codesign -dvvv` block for a bundle or binary.
+signature_details() {
+  codesign -dvvv "$1" 2>&1 || true
+}
+
+# Extracts a single `Key=value` field from a signature block.
+# Returns the first match (leaf certificate authority).
+signature_field() {
+  local details="$1"
+  local key="$2"
+  printf '%s\n' "$details" | awk -F'=' -v k="^${key}=" '$0 ~ k { sub(/^[^=]*=/, ""); print; exit }'
+}
+
+# Returns all nested bundles/frameworks/xpc that carry their own signature.
+nested_signed_paths() {
+  local app_path="$1"
+  if [ -d "$app_path/Contents/Frameworks" ]; then
+    find "$app_path/Contents/Frameworks" -type d \
+      \( -name '*.framework' -o -name '*.xpc' -o -name '*.app' \) \
+      -print 2>/dev/null | sort
+  fi
+}
+
+# Resolves the default Team ID from environment or Config/Signing.xcconfig
+resolved_team_id() {
+  if [ -n "${MORAX_TEAM_ID:-}" ]; then
+    printf '%s\n' "$MORAX_TEAM_ID"
+    return
+  fi
+  local root_dir="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+  local xcconfig="$root_dir/Config/Signing.xcconfig"
+  if [ -f "$xcconfig" ]; then
+    local team
+    team="$(awk -F'=' '/^[[:space:]]*DEVELOPMENT_TEAM[[:space:]]*=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "$xcconfig" 2>/dev/null || true)"
+    if [ -n "$team" ]; then
+      printf '%s\n' "$team"
+      return
+    fi
+  fi
+  printf '\n'
+}
+
+MORAX_TEAM_ID="${MORAX_TEAM_ID:-$(resolved_team_id)}"
+export MORAX_TEAM_ID
+
+# Remediation text for required environment variables.
+env_var_remediation() {
+  local var_name="$1"
+  case "$var_name" in
+    MORAX_TEAM_ID)
+      printf 'Apple Developer Team ID (10 characters). See docs/DISTRIBUTION.md.'
+      ;;
+    MORAX_SIGN_IDENTITY)
+      printf 'Full name of the "Developer ID Application: …" certificate in your keychain. List with: security find-identity -v -p codesigning'
+      ;;
+    MORAX_NOTARY_PROFILE)
+      printf 'notarytool keychain profile name. Create it with: xcrun notarytool store-credentials <profile-name> --apple-id <email> --team-id <team-id> --password <app-specific-password>'
+      ;;
+    *)
+      printf 'See docs/DISTRIBUTION.md for prerequisites and configuration.'
+      ;;
+  esac
+}
+
+# Requires a list of environment variables to be present and non-empty.
+# Reports all missing variables at once with remediation text.
+# Never prints variable values.
+require_env() {
+  local missing=()
+  local var_name
+  for var_name in "$@"; do
+    if [ -z "${!var_name:-}" ]; then
+      missing+=("$var_name")
+    fi
+  done
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    printf 'FAIL missing required environment variables:\n' >&2
+    for var_name in "${missing[@]}"; do
+      printf '  %s — %s\n' "$var_name" "$(env_var_remediation "$var_name")" >&2
+    done
+    exit 64
+  fi
+}
