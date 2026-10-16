@@ -5,11 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Unreleased
+<a id="102"></a>
+## [1.0.2] - 2026-10-16
+
+### Added
 - Ajout de la bande « Compteurs IA » : quotas cockpit authentifiés, cache local, Keychain,
   cadrans Claude/Codex/Gemini et dépense DeepSeek sans pourcentage inventé.
 - Correctifs : fraîcheur locale des relevés hors ligne, dépense DeepSeek basée sur le solde
   fournisseur lorsqu’elle existe, pastilles secondaires complètes et tests URLProtocol injectables.
+- Releases signed with a Developer ID Application certificate, notarized by Apple and stapled, built locally or by `release.yml` once its signing secrets exist.
+
+### Notes
+- This is the first notarized build: macOS opens it without the quarantine workaround needed for 1.0.1.
 
 <a id="101"></a>
 ## [1.0.1] - 2026-10-10
