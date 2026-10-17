@@ -32,6 +32,13 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved', 'Package.swift') }}
           restore-keys: spm-${{ runner.os }}-
 
+      - name: Shell scripts (syntax, shellcheck, upload test)
+        run: |
+          command -v shellcheck >/dev/null || brew install shellcheck
+          bash -n scripts/upload_release.sh scripts/tests/upload_release.test.sh
+          shellcheck scripts/upload_release.sh scripts/tests/upload_release.test.sh
+          scripts/tests/upload_release.test.sh
+
       - name: Build (release)
         run: swift build -c release
 

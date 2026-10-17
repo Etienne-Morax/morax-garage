@@ -83,9 +83,8 @@ Aucun secret, certificat ou identifiant privé n'est commité dans le dépôt (`
 | `MORAX_TEAM_ID` | Identifiant d'équipe Apple Developer (10 caractères, lu dans `Config/Signing.xcconfig` si la variable n'est pas définie). |
 | `MORAX_VERSION` | *(Optionnel)* Surcharge de la version définie dans `./VERSION`. |
 | `MORAX_BUILD` | *(Optionnel)* Surcharge du numéro de build généré. |
-| `MORAX_SUPABASE_URL` | URL du projet Supabase de Morax One (requis par `upload_release.sh`). |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clé service role (requis par `upload_release.sh`, jamais affichée). |
-| `MORAX_STORAGE_BUCKET` | *(Optionnel)* Bucket de stockage, `releases` par défaut. |
+| `MORAX_DOWNLOADS_BUCKET` | *(Optionnel)* Bucket R2 de `upload_release.sh`, `morax-downloads` par défaut. |
+| `MORAX_WRANGLER` | *(Optionnel)* Commande wrangler de `upload_release.sh`, `npx --yes wrangler@4.151.1` par défaut. |
 | `MORAX_REF` / `MORAX_SRC_DIR` / `MORAX_REPO_URL` / `MORAX_RUN_TESTS` | *(Optionnel)* Réglages de `install-from-source.sh`. |
 | `ALLOW_UNNOTARIZED` | *(Optionnel)* Vaut `1` pour autoriser une génération locale ad-hoc non notarisée. |
 
@@ -187,12 +186,10 @@ Le script clone (ou met à jour) `~/Library/Caches/morax-garage-src`, puis lance
 
 ## 11. Publishing to Morax One
 
-1. Produire la release : `ALLOW_UNNOTARIZED=1 scripts/package_release.sh` (ou la variante notarisée, §1).
-2. Téléverser le DMG dans le stockage Morax One :
+1. Produire la release notarisée : `scripts/package_release.sh` (§1). Le hub refuse un manifeste dont la confiance annoncée contredit la signature.
+2. Téléverser le DMG dans le bucket R2 privé de Morax One (ADR 0019 de Morax One), avec wrangler connecté au compte Cloudflare (`npx wrangler login`) :
    ```bash
-   MORAX_SUPABASE_URL="https://<project-ref>.supabase.co" \
-   SUPABASE_SERVICE_ROLE_KEY="<service-role-key>" \
    scripts/upload_release.sh
    ```
-   Le script vérifie l'existence de l'objet via l'endpoint authentifié `storage/v1/object/info/<bucket>/<fichier>`.
-3. Copier `dist/release/release.json` vers `content/releases/garage.json` dans le dépôt Morax One et l'ouvrir en pull request. Le manifeste ne contient aucune URL : le hub signe l'URL de téléchargement.
+   Le script refuse un DMG dont le sha256 diffère de `release.json`, le place sous `morax-downloads/garage/<fichier>`, puis le relit depuis R2 et compare son sha256.
+3. Ingérer le manifeste dans le dépôt Morax One, puis ouvrir une pull request : `pnpm release:ingest garage <chemin>/dist/release/release.json`. Le manifeste ne contient aucune URL : le Worker `morax-downloads` signe l'URL de téléchargement.

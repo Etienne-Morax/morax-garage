@@ -30,3 +30,6 @@ dist/
 *.p12
 *.mobileprovision
 .claude/settings.local.json
+
+# wrangler cache written by scripts/upload_release.sh
+.wrangler/
