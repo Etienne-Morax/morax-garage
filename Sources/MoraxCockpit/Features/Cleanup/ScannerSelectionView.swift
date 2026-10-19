@@ -21,6 +21,9 @@ struct ScannerSelectionView: View {
                 }
                 .padding(.top, 12)
                 
+                recurringCachePurgeCard
+                    .frame(maxWidth: 560)
+
                 // Top Global Estimation Bar
                 estimationGlobalBar
                     .frame(maxWidth: 560)
@@ -146,7 +149,7 @@ struct ScannerSelectionView: View {
                 }
                 
                 VStack(spacing: 12) {
-                    ForEach(ScannerType.allCases) { scanner in
+                    ForEach(ScannerType.allCases.filter { $0 != .recurring }) { scanner in
                         ScannerCardButton(
                             scanner: scanner,
                             isSelected: cleanupState.selectedScanner == scanner,
@@ -175,6 +178,52 @@ struct ScannerSelectionView: View {
         }
     }
     
+    /// One-click entry point for the caches that refill after every install or build.
+    private var recurringCachePurgeCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: ScannerType.recurring.iconName)
+                .font(.title3)
+                .foregroundStyle(MoraxTheme.infoBlue)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Caches récurrents")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(MoraxTheme.textPrimary)
+                    if let summary = cleanupState.cachedSummary(for: .recurring), summary.bytes > 0 {
+                        Text(ByteCountFormatter.string(fromByteCount: summary.bytes, countStyle: .file))
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(MoraxTheme.infoBlue)
+                    }
+                }
+                Text("npm, uv, pip, Yarn, Homebrew, SwiftPM, DerivedData Xcode, anciens navigateurs Playwright. Tout se re-télécharge à la demande. Sélection pré-cochée, confirmation avant la Corbeille.")
+                    .font(.caption2)
+                    .foregroundStyle(MoraxTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: { cleanupState.startRecurringCachePurge() }) {
+                Label("Vider", systemImage: "trash")
+                    .font(.caption.weight(.bold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MoraxTheme.infoBlue)
+            .controlSize(.small)
+            .disabled(cleanupState.isScanning)
+            .help("Scanne les caches récurrents et pré-sélectionne ceux sans risque")
+        }
+        .padding(12)
+        .background(MoraxTheme.infoBlue.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(MoraxTheme.infoBlue.opacity(0.3), lineWidth: 1)
+        )
+        .clipShape(.rect(cornerRadius: 6))
+    }
+
     @ViewBuilder
     private var estimationGlobalBar: some View {
         HStack(spacing: 12) {
@@ -250,6 +299,8 @@ struct ScannerSelectionView: View {
             return "Safari, Google Chrome, Arc, Brave, Firefox, and Edge page/media caches."
         case .system:
             return "User application caches (~/Library/Caches), QuickLook thumbnails, and diagnostic logs."
+        case .recurring:
+            return "npm, uv, pip, Yarn, Homebrew, SwiftPM, Xcode DerivedData and superseded Playwright browsers."
         case .installers:
             return ".dmg, .pkg, large archives (>50MB) in Downloads/Desktop and Homebrew cache."
         case .all:

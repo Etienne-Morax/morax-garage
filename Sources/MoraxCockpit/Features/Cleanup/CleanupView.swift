@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import MoraxCockpitKit
 
@@ -184,6 +185,11 @@ public struct CleanupView: View {
         }
     }
     
+    private func openTrash() {
+        guard let trashURL = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first else { return }
+        NSWorkspace.shared.open(trashURL)
+    }
+
     // MARK: - Step 7: Completion Summary
     private func completionSummaryView(result: TrashBatchResult) -> some View {
         VStack(spacing: 24) {
@@ -199,6 +205,12 @@ public struct CleanupView: View {
                 Text("Successfully reclaimed \(ByteCountFormatter.string(fromByteCount: result.totalReclaimedBytes, countStyle: .file))")
                     .font(.headline)
                     .foregroundStyle(MoraxTheme.textSecondary)
+
+                // The app never empties the Trash itself (spec rule 1), so the space is
+                // only free once the user does.
+                Text("Items are in the Trash — empty it to free the disk space.")
+                    .font(.caption)
+                    .foregroundStyle(MoraxTheme.textMuted)
             }
             
             VStack(spacing: 8) {
@@ -262,6 +274,9 @@ public struct CleanupView: View {
                     showLogSheet = true
                 }
                 .buttonStyle(.bordered)
+
+                Button("Open Trash", action: openTrash)
+                    .buttonStyle(.bordered)
             }
             
             Spacer()

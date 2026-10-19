@@ -19,6 +19,9 @@ public enum ScannerType: String, CaseIterable, Identifiable, Sendable, Codable, 
     case browsers = "Web Browser Caches"
     case system = "System & User Caches"
     case installers = "Installers & Large Archives"
+    /// Curated subset of caches that refill on their own; driven by the one-click purge,
+    /// so it stays out of `concreteScanners` (the other scanners already cover its paths).
+    case recurring = "Recurring Caches"
     case all = "All Scanners"
     
     public var id: String { rawValue }
@@ -37,6 +40,7 @@ public enum ScannerType: String, CaseIterable, Identifiable, Sendable, Codable, 
         case .browsers: return "globe"
         case .system: return "internaldrive"
         case .installers: return "archivebox"
+        case .recurring: return "arrow.3.trianglepath"
         case .all: return "sparkles"
         }
     }
@@ -110,6 +114,9 @@ public final class CleanupStateService {
     private let stagingService: CleanupStagingService
     private let scanRunner: ScanRunner
     private var inMemoryItems: [ScannerType: [FileItem]] = [:]
+
+    /// Set by `startRecurringCachePurge`: the next finished scan preselects its `.safe` items.
+    private var shouldPreselectSafeAfterScan = false
 
     private var scanTask: Task<Void, Never>? = nil
     private var estimationTask: Task<Void, Never>? = nil
@@ -382,6 +389,15 @@ public final class CleanupStateService {
     
     // MARK: - Scanning Flow
 
+    /// One-click purge of the caches that refill on their own: scans the recurring
+    /// caches and preselects every `.safe` item. Nothing moves until the user confirms
+    /// the selection through the regular confirmation sheet.
+    public func startRecurringCachePurge() {
+        selectScanner(.recurring)
+        shouldPreselectSafeAfterScan = true
+        startScan()
+    }
+
     public func startScan() {
         flowState = .scanning(progress: "Initializing scan...")
         isScanning = true
@@ -446,16 +462,21 @@ public final class CleanupStateService {
     private func finishScan(_ items: [FileItem], for scanner: ScannerType) {
         guard !Task.isCancelled else { return }
         let now = Date()
+        storeSnapshot(items, for: scanner, scanDate: now)
         scannedItems = items
+        if shouldPreselectSafeAfterScan {
+            shouldPreselectSafeAfterScan = false
+            selectAllSafe()
+        }
         flowState = .results
         lastScanDate = now
         isScanning = false
-        storeSnapshot(items, for: scanner, scanDate: now)
     }
 
     public func cancelScan() {
         scanTask?.cancel()
         scanTask = nil
+        shouldPreselectSafeAfterScan = false
         isScanning = false
         flowState = .idle
     }
@@ -588,6 +609,8 @@ public final class CleanupStateService {
             return await SystemCacheScanner().scan(progressHandler: progressHandler)
         case .installers:
             return await InstallerScanner().scan(progressHandler: progressHandler)
+        case .recurring:
+            return await RecurringCacheScanner().scan(progressHandler: progressHandler)
         case .all:
             return []
         }

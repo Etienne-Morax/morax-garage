@@ -283,4 +283,39 @@ final class CleanupExecuteTrashTests: XCTestCase {
         XCTAssertEqual(service.scannedItems.map(\.url), [scanned.url])
         XCTAssertEqual(service.cachedSnapshots[ScannerType.resolve.id]?.items.map(\.url), [scanned.url])
     }
+
+    // MARK: - Recurring cache purge
+
+    func testRecurringPurgePreselectsOnlySafeItemsAndWaitsForConfirmation() async throws {
+        let safe = FileItem(url: scanDir.appendingPathComponent("npm"), sizeBytes: 64, modifiedDate: Date(),
+                            category: .devToolCaches, riskTier: .safe)
+        let xcodeOpen = FileItem(url: scanDir.appendingPathComponent("DerivedData"), sizeBytes: 64, modifiedDate: Date(),
+                                 category: .devXcodeDerivedData, riskTier: .rebuildCost)
+        let scannedTypes = OSAllocatedUnfairLock(initialState: [ScannerType]())
+        let service = makeService(scanRunner: { scanner, _ in
+            scannedTypes.withLock { $0.append(scanner) }
+            return [safe, xcodeOpen]
+        })
+
+        service.startRecurringCachePurge()
+        try await waitUntil { service.flowState == .results }
+
+        XCTAssertEqual(scannedTypes.withLock { $0 }, [.recurring])
+        XCTAssertEqual(service.selectedScanner, .recurring)
+        XCTAssertEqual(service.scannedItems.filter(\.isSelected).map(\.url), [safe.url])
+        XCTAssertFalse(service.isConfirming, "Nothing may move before the user confirms")
+    }
+
+    func testRegularScanAfterRecurringPurgeSelectsNothing() async throws {
+        let safe = FileItem(url: scanDir.appendingPathComponent("npm"), sizeBytes: 64, modifiedDate: Date(),
+                            category: .devToolCaches, riskTier: .safe)
+        let service = makeService(scanRunner: { _, _ in [safe] })
+
+        service.startRecurringCachePurge()
+        service.cancelScan()
+        service.startScan()
+        try await waitUntil { service.flowState == .results }
+
+        XCTAssertTrue(service.scannedItems.allSatisfy { !$0.isSelected })
+    }
 }

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+<a id="103"></a>
+## [1.0.3] - 2026-10-19
+
+### Added
+- Bouton « Caches récurrents » dans l'onglet Nettoyage : un clic scanne les caches qui se remplissent après chaque installation ou build (npm/npx, uv, pip, Yarn, Go, CocoaPods, SwiftPM, Homebrew, DerivedData Xcode, anciennes versions des navigateurs Playwright) et pré-coche ceux sans risque. Rien ne part à la Corbeille avant confirmation ; les caches de Xcode ne sont pas cochés tant que Xcode est ouvert.
+- L'écran de fin du nettoyage rappelle que l'espace n'est libéré qu'une fois la Corbeille vidée, avec un bouton « Open Trash ».
+
 <a id="102"></a>
 ## [1.0.2] - 2026-10-16
 

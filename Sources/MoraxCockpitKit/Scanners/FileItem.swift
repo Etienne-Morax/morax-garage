@@ -30,6 +30,7 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Sendable, Codab
     case devRustTarget = "Rust Target Directories"
     case devPythonVenv = "Python Virtual Environments & Cache"
     case devXcodeDerivedData = "Xcode DerivedData"
+    case devToolCaches = "Package & Tool Download Caches"
     
     case installerDMG = "Disk Images (.dmg)"
     case installerPKG = "Installer Packages (.pkg)"
@@ -76,7 +77,7 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Sendable, Codab
     
     public var defaultTier: RiskTier {
         switch self {
-        case .devXcodeDerivedData, .devBuildArtifacts, .brewCache,
+        case .devXcodeDerivedData, .devBuildArtifacts, .brewCache, .devToolCaches,
              .browserSafariCache, .browserChromeCache, .browserArcCache,
              .browserBraveCache, .browserFirefoxCache, .browserEdgeCache,
              .browserOtherCache, .systemUserCaches, .systemLogs,
@@ -105,6 +106,8 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Sendable, Codab
         switch self {
         case .devXcodeDerivedData, .devBuildArtifacts:
             return "Regenerated automatically upon next project build."
+        case .devToolCaches:
+            return "Package manager download cache — refilled on demand by the next install."
         case .brewCache:
             return "Homebrew package download cache — bottles will re-download if needed."
         case .browserSafariCache, .browserChromeCache, .browserArcCache,
@@ -173,6 +176,8 @@ public enum CleanupCategory: String, CaseIterable, Identifiable, Sendable, Codab
             return "film"
         case .devNodeModules, .devBuildArtifacts, .devRustTarget, .devPythonVenv, .devXcodeDerivedData:
             return "hammer"
+        case .devToolCaches:
+            return "shippingbox"
         case .installerDMG, .installerPKG, .installerArchive, .brewCache:
             return "archivebox"
         case .claudeWorktrees:
